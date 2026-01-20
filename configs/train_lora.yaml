@@ -1,0 +1,61 @@
+run:
+  name: exp_lora
+  output_root: outputs
+  seed: 42
+
+model:
+  model_name_or_path: /mnt/sda-20T/Wangkunzhi/Downloads/LLMs/Qwen3-8b
+  torch_dtype: bf16         # auto|bf16|fp16|fp32
+  use_flash_attn: True     # placeholder (kept for extension)
+  gradient_checkpointing: false
+  trust_remote_code: true
+
+# dataset setup (default matches your current script)
+data:
+  dataset_name: cais/mmlu
+  dataset_config: all
+  train_split: auxiliary_train
+  eval_split: validation
+  max_seq_len: 1024
+  num_proc: 8
+
+  prompt:
+    enable_thinking: false
+    template: simple_exam   # currently only one template, but the code is extensible
+
+training:
+  # Trainer/TrainingArguments
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+
+  num_train_epochs: 2.0
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  lr_scheduler_type: cosine
+
+  logging_steps: 1
+  eval_strategy: steps
+  eval_steps: 10000
+  save_strategy: steps
+  save_steps: 1000
+  save_total_limit: 2
+
+  report_to: [tensorboard]
+  optim: adamw_torch
+  dataloader_pin_memory: true
+
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  target_modules: ["q_proj","k_proj","v_proj","o_proj"]   # auto or list[str]
+
+dora:
+  enabled: false         # set true to try DoRA (auto fallback if peft doesn't support)
+
+merge:
+  enabled: false

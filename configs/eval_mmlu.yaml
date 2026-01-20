@@ -1,0 +1,26 @@
+run:
+  name: eval_mmlu
+  output_root: outputs
+  seed: 42
+
+eval:
+  model_name_or_path: Qwen/Qwen3-8B
+  adapter_path: null          # null => baseline
+  torch_dtype: auto
+  trust_remote_code: true
+
+  dataset_name: cais/mmlu
+  dataset_config: all
+  split: validation
+  max_seq_len: 1024
+  num_proc: 8
+
+  prompt:
+    enable_thinking: false
+    template: simple_exam
+
+  # metric: first_token (fast) or generate (true MCQ)
+  metric: generate
+  per_device_batch_size: 4
+  max_new_tokens: 5
+  temperature: 0.0

@@ -1,0 +1,12 @@
+# Core
+torch>=2.1
+transformers>=4.51.0
+datasets>=2.18.0
+accelerate>=0.30.0
+peft>=0.12.0
+pyyaml>=6.0
+numpy>=1.24
+
+# Optional (recommended)
+tensorboard
+safetensors

@@ -1,0 +1,16 @@
+# outputs
+outputs/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.swp
+*.swo
+.venv/
+.env
+.cache/
+
+# HF cache (optional)
+# ~/.cache/huggingface

@@ -1,0 +1,5 @@
+# Optional evaluation stack (vLLM server + EvalScope)
+# NOTE: vLLM install varies by CUDA / OS. If pip fails, follow vLLM official install docs.
+vllm
+# EvalScope (model evaluation framework)
+evalscope
