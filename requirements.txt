@@ -1,12 +1,11 @@
 accelerate
-torch
-transformers
 datasets
-accelerate
+evalscope
+numpy
 peft
 pyyaml
-numpy
-tensorboard
 safetensors
-evalscope
+tensorboard
+torch
+transformers
 vllm
