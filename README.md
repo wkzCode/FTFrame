@@ -1,4 +1,4 @@
-# LLM Finetune Framework
+# LLM PEFT Framework
 
 This repo is a **finetuning framework** for LLM using **PEFT adapters**.
 
