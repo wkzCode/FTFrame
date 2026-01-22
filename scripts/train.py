@@ -7,9 +7,11 @@ import argparse
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 from dataclasses import asdict
+from datetime import datetime
 from typing import Any, Dict
 
 from transformers import Trainer, TrainingArguments
+from transformers.trainer_utils import get_last_checkpoint
 
 from src.data.collator import DataCollatorForCausalLMWithPadding
 from src.data.mmlu import MMLUConfig, load_mmlu_splits, tokenize_mmlu_for_sft
@@ -25,10 +27,47 @@ from src.utils.seed import set_all_seeds
 def _dict_get(d: Dict[str, Any], key: str, default=None):
     return d.get(key, default) if isinstance(d, dict) else default
 
+def _resolve_resume_checkpoint(out_dir: str, resume_arg):
+    """
+    resume_arg:
+      - None: no resume
+      - "auto": pick latest checkpoint under out_dir
+      - path: resume from that checkpoint path
+    """
+    if resume_arg is None:
+        return None
+
+    # bool True -> auto
+    if resume_arg is True:
+        resume_arg = "auto"
+
+    if isinstance(resume_arg, str):
+        v = resume_arg.strip()
+        if v.lower() in {"", "null", "none"}:
+            return None
+        if v.lower() == "auto":
+            ckpt = get_last_checkpoint(out_dir)
+            return ckpt
+        # explicit path
+        if os.path.isdir(v):
+            return v
+        # if user passes relative path, try under out_dir
+        rel = os.path.join(out_dir, v)
+        if os.path.isdir(rel):
+            return rel
+        raise ValueError(f"resume_from_checkpoint path not found: {v}")
+
+    raise TypeError(f"Unsupported resume_from_checkpoint type: {type(resume_arg)}")
 
 def main():
     parser = argparse.ArgumentParser(description="Finetune Qwen3-8B on MMLU with LoRA/DoRA")
     parser.add_argument("--config", type=str, required=True)
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=str,
+        default=None,
+        help="Resume training from checkpoint. Use 'auto' to pick latest under outputs/<run_name>/, or pass a checkpoint dir path.",
+    )
     parser.add_argument("overrides", nargs="*", help="Dotlist overrides like training.learning_rate=1e-4")
     args = parser.parse_args()
 
@@ -41,7 +80,13 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     logger = setup_logging(out_dir, name=run_name)
-    save_yaml(cfg, os.path.join(out_dir, "run_config.yaml"))
+    # If resuming and run_config.yaml already exists, don't overwrite it silently.
+    run_cfg_path = os.path.join(out_dir, "run_config.yaml")
+    if os.path.exists(run_cfg_path) and args.resume_from_checkpoint:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_yaml(cfg, os.path.join(out_dir, f"run_config_resume_{ts}.yaml"))
+    else:
+        save_yaml(cfg, run_cfg_path)
 
     seed = int(cfg["run"].get("seed", 42))
     set_all_seeds(seed)
@@ -113,6 +158,14 @@ def main():
     # training args
     tcfg = cfg.get("training", {})
 
+    # resume logic: CLI arg wins; else allow config key training.resume_from_checkpoint
+    resume_value = args.resume_from_checkpoint
+    if resume_value is None:
+        resume_value = tcfg.get("resume_from_checkpoint", None)
+    resume_ckpt = _resolve_resume_checkpoint(out_dir, resume_value)
+    if resume_ckpt:
+        logger.info(f"Resuming from checkpoint: {resume_ckpt}")
+
     use_bf16 = False
     use_fp16 = False
     # dtype auto: if cuda + bf16 supported, we loaded bf16. For Trainer flags, we follow hardware.
@@ -124,9 +177,14 @@ def main():
     except Exception:
         pass
 
+    # If resuming, avoid overwrite_output_dir=True
+    overwrite_output_dir = bool(tcfg.get("overwrite_output_dir", True))
+    if resume_ckpt:
+        overwrite_output_dir = False
+
     training_args = TrainingArguments(
         output_dir=out_dir,
-        overwrite_output_dir=True,
+        overwrite_output_dir=overwrite_output_dir,
 
         num_train_epochs=float(tcfg.get("num_train_epochs", 1.0)),
         per_device_train_batch_size=int(tcfg.get("per_device_train_batch_size", 1)),
@@ -167,7 +225,9 @@ def main():
     )
 
     logger.info("Starting training...")
-    train_result = trainer.train()
+    # If resume_ckpt is None, this behaves like normal training.
+    # If resume_ckpt is a path, Trainer will restore optimizer/scheduler/rng state, etc.
+    train_result = trainer.train(resume_from_checkpoint=resume_ckpt)
 
     logger.info("Saving adapter + tokenizer...")
     trainer.save_model(out_dir)
@@ -180,12 +240,12 @@ def main():
     trainer.save_state()
     save_json(train_metrics, os.path.join(out_dir, "train_results.json"))
 
-    logger.info("Running evaluation...")
-    eval_metrics = trainer.evaluate()
-    eval_metrics["eval_samples"] = len(eval_ds)
-    trainer.log_metrics("eval", eval_metrics)
-    trainer.save_metrics("eval", eval_metrics)
-    save_json(eval_metrics, os.path.join(out_dir, "eval_results.json"))
+    # logger.info("Running evaluation...")
+    # eval_metrics = trainer.evaluate()
+    # eval_metrics["eval_samples"] = len(eval_ds)
+    # trainer.log_metrics("eval", eval_metrics)
+    # trainer.save_metrics("eval", eval_metrics)
+    # save_json(eval_metrics, os.path.join(out_dir, "eval_results.json"))
 
     # merge
     if bool(cfg.get("merge", {}).get("enabled", False)):
