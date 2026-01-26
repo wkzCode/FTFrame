@@ -2,6 +2,7 @@ run:
   name: exp_lora
   output_root: outputs
   seed: 42
+  engine: trainer   # trainer | accelerate
 
 model:
   model_name_or_path: /mnt/sda-20T/Wangkunzhi/Downloads/LLMs/Qwen3-8b
@@ -45,6 +46,8 @@ training:
   report_to: [tensorboard]
   optim: adamw_torch
   dataloader_pin_memory: true
+  dataloader_num_workers: 0
+  max_grad_norm: 1.0
 
 lora:
   enabled: true
@@ -59,3 +62,8 @@ dora:
 
 merge:
   enabled: false
+
+distributed:
+  engine: trainer              # trainer|accelerate (can also override via CLI --engine)
+  deepspeed_config: null       # e.g., configs/deepspeed_zero2.json
+  mixed_precision: auto        # auto|bf16|fp16|no (accelerate engine only)

@@ -9,3 +9,5 @@ tensorboard
 torch
 transformers
 vllm
+tqdm
+deepspeed; sys_platform != "win32"

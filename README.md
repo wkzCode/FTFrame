@@ -28,10 +28,17 @@ python scripts/eval_evalscope.py
 
 ### LoRA finetune
 ```bash
+# 单卡或常规Trainer分布式（torchrun/accelerate launch均可）
 python scripts/train.py --config configs/train_lora.yaml
 
-# Multi-GPU
-# accelerate launch scripts/train.py --config configs/train_lora.yaml
+# 自定义Accelerate引擎（需要传 --engine accelerate）
+accelerate launch scripts/train.py --config configs/train_lora.yaml --engine accelerate
+
+# DeepSpeed Zero-2（示例）
+accelerate launch scripts/train.py \
+  --config configs/train_lora.yaml \
+  --engine accelerate \
+  distributed.deepspeed_config=configs/deepspeed_zero2.json
 ```
 
 ### Evaluate finetuned adapter
@@ -41,6 +48,11 @@ bash scripts/serve_vllm.sh
 # Another Terminal
 python scripts/eval_evalscope.py
 ```
+
+
+## Distributed options
+- 配置项：`run.engine`/`distributed.engine` 选择 `trainer` 或 `accelerate`；`distributed.deepspeed_config` 指向 DeepSpeed 配置（示例见 `configs/deepspeed_zero2.json`）；`distributed.mixed_precision` 控制混合精度（auto/bf16/fp16/no）。
+- Trainer 路径使用 `TrainingArguments` 原生分布式/DeepSpeed 支持；Accelerate 路径使用自定义训练循环并内置断点保存、指标聚合。
 
 
 ## 2) What gets saved
@@ -62,6 +74,6 @@ Each run writes into `outputs/<run_name>/`:
 ## 4) TODO
 - [ ] More dataset (only MMLU now)
 - [ ] More PEFT method
-- [ ] DDP/DeepSpeed supported
+- [x] DDP/DeepSpeed supported
 
-> Thanks for Huggingface, vLLM, EvalScope
+> Thanks for Huggingface, vLLM, EvalScope, etc.
